@@ -70,6 +70,7 @@ def get_recommendations(model, cosine_sim=cosine_sim):
 
     return df.iloc[smart_indices][['model', 'brand_name', 'os']]
 
+
 # ==============================
 # EVALUATION FUNCTION
 # ==============================
@@ -130,6 +131,19 @@ def evaluate_system(df, recommendations_func, k=10, sample_size=50):
 # ==============================
 # STREAMLIT UI
 # ==============================
+st.title("📱 Smartphone Recommendation System")
+
+user_input = st.text_input("Enter Smartphone Name:")
+
+if st.button("Get Recommendations"):
+    results = get_recommendations(user_input)
+
+    if results is None:
+        st.error("Smartphone not found in dataset.")
+    else:
+        st.success(f"Recommendations for '{user_input}':")
+        st.dataframe(results)
+        
 st.subheader("📊 Evaluation Metrics vs K")
 
 if st.button("Generate Evaluation Chart"):
