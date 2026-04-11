@@ -187,3 +187,18 @@ if st.button("Generate Evaluation Chart"):
     })
 
     st.dataframe(result_df)
+
+    # ==============================
+    # AVERAGE METRICS
+    # ==============================
+    avg_precision = np.mean(precision_scores)
+    avg_recall = np.mean(recall_scores)
+    avg_f1 = np.mean(f1_scores)
+
+    st.subheader("📌 Average Evaluation Metrics")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Avg Precision", f"{avg_precision:.4f}")
+    col2.metric("Avg Recall", f"{avg_recall:.4f}")
+    col3.metric("Avg F1-score", f"{avg_f1:.4f}")
