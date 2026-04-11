@@ -78,6 +78,8 @@ def evaluate_system(df, recommendations_func, k=10, sample_size=50):
     test_samples = df.sample(sample_size, random_state=42)
 
     precision_scores = []
+    recall_scores = []
+    f1_scores = []
 
     for _, row in test_samples.iterrows():
         target_name = row['model']
@@ -90,55 +92,84 @@ def evaluate_system(df, recommendations_func, k=10, sample_size=50):
 
         rec_top_k = recommendations.head(k)
 
+        # ==============================
+        # TRUE RELEVANT ITEMS (GROUND TRUTH)
+        # ==============================
+        total_relevant = df[df['brand_name'] == target_brand].shape[0] - 1  # exclude itself
+
+        if total_relevant == 0:
+            continue
+
+        # ==============================
+        # RECOMMENDED RELEVANT ITEMS
+        # ==============================
         relevant_count = rec_top_k[
             rec_top_k['brand_name'] == target_brand
         ].shape[0]
 
-        precision_at_k = relevant_count / k
-        precision_scores.append(precision_at_k)
+        # ==============================
+        # METRICS
+        # ==============================
+        precision = relevant_count / k
+        recall = relevant_count / total_relevant
 
-    return np.mean(precision_scores) if precision_scores else 0
+        if precision + recall == 0:
+            f1 = 0
+        else:
+            f1 = 2 * (precision * recall) / (precision + recall)
 
+        precision_scores.append(precision)
+        recall_scores.append(recall)
+        f1_scores.append(f1)
+
+    return {
+        "precision": np.mean(precision_scores) if precision_scores else 0,
+        "recall": np.mean(recall_scores) if recall_scores else 0,
+        "f1": np.mean(f1_scores) if f1_scores else 0
+    }
 # ==============================
 # STREAMLIT UI
 # ==============================
-st.title("📱 Smartphone Recommendation System")
-
-user_input = st.text_input("Enter Smartphone Name:")
-
-if st.button("Get Recommendations"):
-    results = get_recommendations(user_input)
-
-    if results is None:
-        st.error("Smartphone not found in dataset.")
-    else:
-        st.success(f"Recommendations for '{user_input}':")
-        st.dataframe(results)
-
-# ==============================
-# EVALUATION CHART
-# ==============================
-st.subheader("📊 Precision@K Evaluation Chart")
+st.subheader("📊 Evaluation Metrics vs K")
 
 if st.button("Generate Evaluation Chart"):
     k_values = list(range(1, 11))
-    scores = []
+
+    precision_scores = []
+    recall_scores = []
+    f1_scores = []
 
     for k in k_values:
-        score = evaluate_system(df, get_recommendations, k=k)
-        scores.append(score)
+        scores = evaluate_system(df, get_recommendations, k=k)
 
+        precision_scores.append(scores['precision'])
+        recall_scores.append(scores['recall'])
+        f1_scores.append(scores['f1'])
+
+    # ==============================
+    # PLOT
+    # ==============================
     fig, ax = plt.subplots()
-    ax.plot(k_values, scores, marker='o')
+
+    ax.plot(k_values, precision_scores, marker='o', label='Precision')
+    ax.plot(k_values, recall_scores, marker='s', label='Recall')
+    ax.plot(k_values, f1_scores, marker='^', label='F1-score')
+
     ax.set_xlabel("K (Top Recommendations)")
-    ax.set_ylabel("Precision@K")
-    ax.set_title("Precision@K vs K")
+    ax.set_ylabel("Score")
+    ax.set_title("Evaluation Metrics vs K")
+    ax.legend()
 
     st.pyplot(fig)
 
-    # show table
+    # ==============================
+    # TABLE
+    # ==============================
     result_df = pd.DataFrame({
         'K': k_values,
-        'Precision': scores
+        'Precision': precision_scores,
+        'Recall': recall_scores,
+        'F1-score': f1_scores
     })
+
     st.dataframe(result_df)
