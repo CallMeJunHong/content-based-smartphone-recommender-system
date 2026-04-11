@@ -1,71 +1,81 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
-df = pd.read_csv('smartphones.csv')
-# fill missing values
-df = df.fillna('')
+# ==============================
+# LOAD DATA
+# ==============================
+@st.cache_data
+def load_data():
+    df = pd.read_csv('smartphones.csv')
+    df = df.fillna('')
 
-# DATA CLEANING
-df['model'] = df['model'].str.lower().str.strip()
-df['brand_name'] = df['brand_name'].str.lower().str.strip()
-df['os'] = df['os'].str.lower().str.strip()
-df['processor_brand'] = df['processor_brand'].str.lower().str.strip()
-df['battery_capacity'] = pd.to_numeric(df['battery_capacity'], errors='coerce').fillna(0)
-df['ram_capacity'] = pd.to_numeric(df['ram_capacity'], errors='coerce').fillna(0)
-df['internal_memory'] = pd.to_numeric(df['internal_memory'], errors='coerce').fillna(0)
-df['refresh_rate'] = pd.to_numeric(df['refresh_rate'], errors='coerce').fillna(0)
+    # DATA CLEANING
+    df['model'] = df['model'].str.lower().str.strip()
+    df['brand_name'] = df['brand_name'].str.lower().str.strip()
+    df['os'] = df['os'].str.lower().str.strip()
+    df['processor_brand'] = df['processor_brand'].str.lower().str.strip()
+    df['battery_capacity'] = pd.to_numeric(df['battery_capacity'], errors='coerce').fillna(0)
+    df['ram_capacity'] = pd.to_numeric(df['ram_capacity'], errors='coerce').fillna(0)
+    df['internal_memory'] = pd.to_numeric(df['internal_memory'], errors='coerce').fillna(0)
+    df['refresh_rate'] = pd.to_numeric(df['refresh_rate'], errors='coerce').fillna(0)
 
-df['metadata'] = (
-    df['brand_name'] + " " +
-    df['os'] + " " +
-    df['processor_brand'] + " " +
-    df['battery_capacity'].astype(str) + " mAh " +
-    df['ram_capacity'].astype(str) + " GB " +
-    df['internal_memory'].astype(str) + " GB " +
-    df['refresh_rate'].astype(str) + " Hz"
-)
+    # METADATA
+    df['metadata'] = (
+        df['brand_name'] + " " +
+        df['os'] + " " +
+        df['processor_brand'] + " " +
+        df['battery_capacity'].astype(str) + " mAh " +
+        df['ram_capacity'].astype(str) + " GB " +
+        df['internal_memory'].astype(str) + " GB " +
+        df['refresh_rate'].astype(str) + " Hz"
+    )
 
+    return df
+
+df = load_data()
+
+# ==============================
 # TF-IDF + SIMILARITY
-tfidf = TfidfVectorizer(stop_words='english')
-tfidf_matrix = tfidf.fit_transform(df['metadata'])
+# ==============================
+@st.cache_resource
+def compute_similarity(data):
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(data['metadata'])
+    cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+    return cosine_sim
 
-cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+cosine_sim = compute_similarity(df)
 
-# map name → index
-indices = pd.Series(df.index, index=df['model'])
+# index mapping
+indices = pd.Series(df.index, index=df['model']).drop_duplicates()
 
+# ==============================
 # RECOMMENDATION FUNCTION
+# ==============================
 def get_recommendations(model, cosine_sim=cosine_sim):
     model = model.lower().strip()
 
     if model not in indices:
-        return "Smartphone not found in dataset."
+        return None
 
     idx = indices[model]
 
     sim_scores = list(enumerate(cosine_sim[idx]))
-
     sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
 
-    sim_scores = sim_scores[1:11]  # top 10 excluding itself
+    sim_scores = sim_scores[1:11]
 
     smart_indices = [i[0] for i in sim_scores]
 
     return df.iloc[smart_indices][['model', 'brand_name', 'os']]
 
-print("--- Smartphone Recommender System ---")
-user_input = input("Enter Smartphone Name: ")
-
-results = get_recommendations(user_input)
-
-print(f"\nRecommendations for '{user_input}':")
-print(results)
-
-# 6. EVALUATION (Precision@K)
+# ==============================
+# EVALUATION FUNCTION
+# ==============================
 def evaluate_system(df, recommendations_func, k=10, sample_size=50):
-
     sample_size = min(sample_size, len(df))
     test_samples = df.sample(sample_size, random_state=42)
 
@@ -77,10 +87,9 @@ def evaluate_system(df, recommendations_func, k=10, sample_size=50):
 
         recommendations = recommendations_func(target_name)
 
-        if isinstance(recommendations, str):
+        if recommendations is None:
             continue
 
-        # take top-k recommendations safely
         rec_top_k = recommendations.head(k)
 
         relevant_count = rec_top_k[
@@ -92,8 +101,29 @@ def evaluate_system(df, recommendations_func, k=10, sample_size=50):
 
     return np.mean(precision_scores) if precision_scores else 0
 
-# RUN EVALUATION
-m_precision = evaluate_system(df, get_recommendations, k=10)
+# ==============================
+# STREAMLIT UI
+# ==============================
+st.title("📱 Smartphone Recommendation System")
 
-print("\n--- Evaluation Results ---")
-print(f"Mean Precision@10: {m_precision:.2%}")
+st.write("Enter a smartphone model to get similar recommendations.")
+
+user_input = st.text_input("Enter Smartphone Name:")
+
+if st.button("Get Recommendations"):
+    results = get_recommendations(user_input)
+
+    if results is None:
+        st.error("Smartphone not found in dataset.")
+    else:
+        st.success(f"Recommendations for '{user_input}':")
+        st.dataframe(results)
+
+# ==============================
+# EVALUATION SECTION
+# ==============================
+st.subheader("📊 Model Evaluation")
+
+if st.button("Run Evaluation (Precision@10)"):
+    score = evaluate_system(df, get_recommendations, k=10)
+    st.write(f"Mean Precision@10: **{score:.2%}**")
