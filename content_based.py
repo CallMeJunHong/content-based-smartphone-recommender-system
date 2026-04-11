@@ -23,13 +23,13 @@ def load_data():
     df['refresh_rate'] = pd.to_numeric(df['refresh_rate'], errors='coerce').fillna(0)
 
     df['metadata'] = (
-        df['brand_name'] + " " * 2 +      # low importance
-        df['os'] + " " * 2 +
-        df['processor_brand'] + " " * 3 +  # medium importance
-        (df['battery_capacity'].astype(str) + " mAh ") * 4 +   # HIGH
-        (df['ram_capacity'].astype(str) + " GB ") * 5 +        # VERY HIGH
-        (df['internal_memory'].astype(str) + " GB ") * 4 +
-        (df['refresh_rate'].astype(str) + " Hz ") * 3
+        df['brand_name'] + " " +
+        df['os'] + " " +
+        df['processor_brand'] + " " +
+        df['battery_capacity'].astype(str) + " mAh " +
+        df['ram_capacity'].astype(str) + " GB " +
+        df['internal_memory'].astype(str) + " GB " +
+        df['refresh_rate'].astype(str) + " Hz"
     )
 
     return df
